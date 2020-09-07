@@ -4,15 +4,24 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import com.asish.restservice.entities.User;
+import com.asish.restservice.exception.UserExistsException;
+import com.asish.restservice.exception.UserNotFoundException;
 import com.asish.restservice.repository.UserRepository;
 
 @Service
 public class UserServiceImpl implements UserService {
 
 	private final UserRepository userRepository;
+
+	@Value("${USER_NOT_FOUND_MESSAGE}")
+	private String userNotFoundMsg;
+
+	@Value("${USER_EXISTS_MESSAGE}")
+	private String userExistsMsg;
 
 	@Autowired
 	public UserServiceImpl(UserRepository userRepository) {
@@ -26,12 +35,19 @@ public class UserServiceImpl implements UserService {
 
 	@Override
 	public User createUser(User user) {
-		return userRepository.save(user);
+		// Check if the user with userName already exists or not.
+		boolean isExistUserName = userRepository.findByUsername(user.getUsername()).isPresent();
+		boolean isExistUserSSN = userRepository.findBySsn(user.getSsn()).isPresent();
+		if (!isExistUserName && !isExistUserSSN) {
+			return userRepository.save(user);
+		} else {
+			throw new UserExistsException(userExistsMsg);
+		}
 	}
 
 	@Override
 	public User getUserById(long id) {
-		return userRepository.findById(id).orElseThrow(() -> new RuntimeException("No User Found"));
+		return userRepository.findById(id).orElseThrow(() -> new UserNotFoundException(userNotFoundMsg));
 	}
 
 	@Override
@@ -41,13 +57,14 @@ public class UserServiceImpl implements UserService {
 			user.setId(userOpt.get().getId());
 			return userRepository.save(user);
 		} else {
-			throw new RuntimeException("No User Found");
+			throw new UserNotFoundException(userNotFoundMsg);
 		}
 	}
 
 	@Override
 	public void deleteUserById(long id) {
-		userRepository.delete(userRepository.findById(id).get());
+		User user = userRepository.findById(id).orElseThrow(() -> new UserNotFoundException(userNotFoundMsg));
+		userRepository.delete(user);
 	}
 
 	@Override
